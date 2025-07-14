@@ -13,9 +13,6 @@ export default function Home() {
     
     // Log environment validation (only in development)
     logEnvironmentValidation(process.env.NODE_ENV === 'development', true);
-    
-    // Test logging the public key as requested
-    console.log('NEXT_PUBLIC_VAPI_KEY:', process.env.NEXT_PUBLIC_VAPI_KEY);
   }, []);
 
   return (
@@ -80,10 +77,10 @@ export default function Home() {
         </div>
 
         <div className="text-sm text-gray-500 font-[family-name:var(--font-noto-sans-georgian)]">
-          Check the browser console for environment variable logs
+          Environment variables are validated and ready for Vapi integration
           <br />
           <span className="text-xs text-gray-400">
-            Note: Server-side variables (like VAPI_PRIVATE_KEY) are validated separately
+            Server-side variables (like VAPI_PRIVATE_KEY) are validated separately
           </span>
         </div>
       </div>

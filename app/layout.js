@@ -22,6 +22,7 @@ export default function RootLayout({ children }) {
     <html lang="en">
       <body
         className={`${notoSansGeorgian.variable} ${poppins.variable} antialiased`}
+        suppressHydrationWarning={true}
       >
         {children}
       </body>
