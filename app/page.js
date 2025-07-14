@@ -1,18 +1,18 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { validateEnvironmentVariables, logEnvironmentValidation } from '@/lib/env';
+import { validateClientEnvironmentVariables, logEnvironmentValidation } from '@/lib/env';
 
 export default function Home() {
   const [envStatus, setEnvStatus] = useState(null);
 
   useEffect(() => {
     // Validate environment variables on client side
-    const validation = validateEnvironmentVariables();
+    const validation = validateClientEnvironmentVariables();
     setEnvStatus(validation);
     
     // Log environment validation (only in development)
-    logEnvironmentValidation(process.env.NODE_ENV === 'development');
+    logEnvironmentValidation(process.env.NODE_ENV === 'development', true);
     
     // Test logging the public key as requested
     console.log('NEXT_PUBLIC_VAPI_KEY:', process.env.NEXT_PUBLIC_VAPI_KEY);
@@ -40,7 +40,7 @@ export default function Home() {
                   <svg className="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 20 20">
                     <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
                   </svg>
-                  All environment variables loaded successfully
+                  All client-side environment variables loaded successfully
                 </div>
               ) : (
                 <div className="text-red-600">
@@ -48,7 +48,7 @@ export default function Home() {
                     <svg className="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 20 20">
                       <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
                     </svg>
-                    Environment validation failed
+                    Client-side environment validation failed
                   </div>
                   <ul className="text-sm text-left">
                     {envStatus.errors.map((error, index) => (
@@ -81,6 +81,10 @@ export default function Home() {
 
         <div className="text-sm text-gray-500 font-[family-name:var(--font-noto-sans-georgian)]">
           Check the browser console for environment variable logs
+          <br />
+          <span className="text-xs text-gray-400">
+            Note: Server-side variables (like VAPI_PRIVATE_KEY) are validated separately
+          </span>
         </div>
       </div>
     </div>
