@@ -12,7 +12,6 @@ export default function VoiceAssistant() {
   const [isProcessing, setIsProcessing] = useState(false);
   const [retryCount, setRetryCount] = useState(0);
   const [errorMessage, setErrorMessage] = useState('');
-  const [isMuted, setIsMuted] = useState(false);
   
   // Conversation flow states
   const [conversationState, setConversationState] = useState('idle'); // idle, greeting, active, ending
@@ -30,8 +29,6 @@ export default function VoiceAssistant() {
 
   // Sound effects
   const playSound = useCallback((frequency, duration = 100) => {
-    if (isMuted) return;
-    
     try {
       if (!audioContextRef.current) {
         audioContextRef.current = new (window.AudioContext || window.webkitAudioContext)();
@@ -56,7 +53,7 @@ export default function VoiceAssistant() {
     } catch (error) {
       // Silent fail for sound effects
     }
-  }, [isMuted]);
+  }, []);
 
   // Clear all timers
   const clearAllTimers = useCallback(() => {
@@ -325,11 +322,6 @@ export default function VoiceAssistant() {
     stopCall();
   };
 
-  const toggleMute = () => {
-    setIsMuted(!isMuted);
-    playSound(isMuted ? 1000 : 500, 50); // Mute toggle sound
-  };
-
   return (
     <>
       {/* Enhanced wave animations */}
@@ -425,26 +417,6 @@ export default function VoiceAssistant() {
               <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
                       d="M12 14a4 4 0 004-4V5a4 4 0 10-8 0v5a4 4 0 004 4zm6-4v1a6 6 0 01-12 0v-1m6 6v4m-4 0h8" />
-              </svg>
-            )}
-          </button>
-
-          {/* Settings/Mute button */}
-          <button 
-            onClick={toggleMute}
-            className="absolute -top-2 -left-2 w-6 h-6 rounded-full text-white text-xs flex items-center justify-center shadow hover:opacity-80 smooth-transition"
-            style={{ backgroundColor: isMuted ? '#666' : ORANGE }}
-            aria-label={isMuted ? 'Unmute sounds' : 'Mute sounds'}
-          >
-            {isMuted ? (
-              <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
-                <path fillRule="evenodd" d="M9.383 3.076A1 1 0 0110 4v12a1 1 0 01-1.617.817L4.09 13H2a1 1 0 01-1-1V8a1 1 0 011-1h2.09l4.293-3.817z" clipRule="evenodd" />
-                <path d="M12.293 7.293a1 1 0 011.414 0L15 8.586l1.293-1.293a1 1 0 111.414 1.414L16.414 10l1.293 1.293a1 1 0 01-1.414 1.414L15 11.414l-1.293 1.293a1 1 0 01-1.414-1.414L13.586 10l-1.293-1.293a1 1 0 010-1.414z" />
-              </svg>
-            ) : (
-              <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
-                <path fillRule="evenodd" d="M9.383 3.076A1 1 0 0110 4v12a1 1 0 01-1.617.817L4.09 13H2a1 1 0 01-1-1V8a1 1 0 011-1h2.09l4.293-3.817z" clipRule="evenodd" />
-                <path d="M12 8a4 4 0 014 4v2a1 1 0 11-2 0v-2a2 2 0 00-2-2z" />
               </svg>
             )}
           </button>
