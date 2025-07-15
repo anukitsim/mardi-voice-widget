@@ -25,35 +25,6 @@ export default function VoiceAssistant() {
   const processingTimeoutRef = useRef(null);
   const silenceTimeoutRef = useRef(null);
   const endingTimeoutRef = useRef(null);
-  const audioContextRef = useRef(null);
-
-  // Sound effects
-  const playSound = useCallback((frequency, duration = 100) => {
-    try {
-      if (!audioContextRef.current) {
-        audioContextRef.current = new (window.AudioContext || window.webkitAudioContext)();
-      }
-      
-      const ctx = audioContextRef.current;
-      const oscillator = ctx.createOscillator();
-      const gainNode = ctx.createGain();
-      
-      oscillator.connect(gainNode);
-      gainNode.connect(ctx.destination);
-      
-      oscillator.frequency.setValueAtTime(frequency, ctx.currentTime);
-      oscillator.type = 'sine';
-      
-      gainNode.gain.setValueAtTime(0, ctx.currentTime);
-      gainNode.gain.linearRampToValueAtTime(0.1, ctx.currentTime + 0.01);
-      gainNode.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + duration / 1000);
-      
-      oscillator.start(ctx.currentTime);
-      oscillator.stop(ctx.currentTime + duration / 1000);
-    } catch (error) {
-      // Silent fail for sound effects
-    }
-  }, []);
 
   // Clear all timers
   const clearAllTimers = useCallback(() => {
@@ -104,9 +75,6 @@ export default function VoiceAssistant() {
         vapiRef.current.stop();
         vapiRef.current = null;
       }
-      if (audioContextRef.current) {
-        audioContextRef.current.close();
-      }
     };
   }, [clearAllTimers]);
 
@@ -118,7 +86,6 @@ export default function VoiceAssistant() {
       setErrorMessage('');
       setRetryCount(0);
       clearAllTimers();
-      playSound(800, 150); // Start sound
       
       if (isFirstActivation) {
         setConversationState('greeting');
@@ -135,7 +102,6 @@ export default function VoiceAssistant() {
       setErrorMessage('');
       setConversationState('idle');
       clearAllTimers();
-      playSound(600, 150); // End sound
     });
 
     // User started speaking
@@ -154,13 +120,10 @@ export default function VoiceAssistant() {
         setIsProcessing(true);
       }, 300);
       
-      // Only set a long silence timer (30 seconds) for true inactivity
+      // Start silence detection (5s)
       silenceTimeoutRef.current = setTimeout(() => {
-        if (isListening && conversationState !== 'ending') {
-          // Don't end conversation, just offer to help
-          console.log('Long silence detected - offering help');
-        }
-      }, 30000);
+        handleSilence();
+      }, 5000);
     });
 
     // Message handling with context
@@ -173,8 +136,8 @@ export default function VoiceAssistant() {
           setLastUserMessage(transcript);
           setConversationContext(prev => [...prev.slice(-4), { role: 'user', content: transcript }]);
           
-          // Only check for explicit goodbye messages - don't auto-end on "thank you"
-          if (isExplicitGoodbye(transcript)) {
+          // Check for goodbye/thank you
+          if (isGoodbyeMessage(transcript)) {
             handleGoodbye();
           }
         }
@@ -183,8 +146,11 @@ export default function VoiceAssistant() {
         if (message.role === 'assistant') {
           setConversationContext(prev => [...prev.slice(-4), { role: 'assistant', content: transcript }]);
           
-          // Don't auto-end conversations - let them flow naturally
+          // Start ending timer (15s silence after response)
           clearAllTimers();
+          endingTimeoutRef.current = setTimeout(() => {
+            handleGoodbye();
+          }, 15000);
         }
       }
       
@@ -218,7 +184,7 @@ export default function VoiceAssistant() {
     vapi.on('volume-level', (level) => {
       // Silent volume handling
     });
-  }, [isFirstActivation, retryCount, playSound, clearAllTimers, isListening, conversationState]);
+  }, [isFirstActivation, retryCount, clearAllTimers]);
 
   // Handle silence with contextual prompts
   const handleSilence = useCallback(() => {
@@ -238,35 +204,29 @@ export default function VoiceAssistant() {
   // Generate contextual prompts
   const generateContextualPrompt = (lastMessage, context) => {
     if (!lastMessage) {
-      return "What can I help you with regarding Mardi Holding?";
+      return "Is there anything specific about Mardi Holding I can help you with?";
     }
     
     const lowerMessage = lastMessage.toLowerCase();
     
     if (lowerMessage.includes('project') || lowerMessage.includes('development')) {
-      return "I'd be happy to tell you about our projects. Are you interested in residential or commercial developments?";
+      return "Would you like to know more about our specific projects or development timeline?";
     }
     if (lowerMessage.includes('contact') || lowerMessage.includes('reach')) {
-      return "I can help you get in touch with the right person. What specifically would you like to discuss?";
+      return "Would you like me to provide contact details for a specific department?";
     }
     if (lowerMessage.includes('service') || lowerMessage.includes('offer')) {
-      return "We offer comprehensive real estate services. Are you looking to buy, sell, or invest in property?";
-    }
-    if (lowerMessage.includes('location') || lowerMessage.includes('where')) {
-      return "Are you asking about our office locations or project locations?";
-    }
-    if (lowerMessage.includes('price') || lowerMessage.includes('cost')) {
-      return "I can help with pricing information. Which specific project or service are you interested in?";
+      return "Are you interested in learning about our real estate or development services?";
     }
     
-    return "I'm here to help with any questions about Mardi Holding. What would you like to know more about?";
+    return "What else would you like to know about Mardi Holding?";
   };
 
-  // Check for explicit goodbye messages only
-  const isExplicitGoodbye = (message) => {
-    const explicitGoodbyes = ['goodbye', 'bye bye', 'see you later', 'talk to you later', 'that\'s all for now'];
+  // Check for goodbye messages
+  const isGoodbyeMessage = (message) => {
+    const goodbyeWords = ['goodbye', 'bye', 'thank you', 'thanks', 'that\'s all', 'done'];
     const lowerMessage = message.toLowerCase();
-    return explicitGoodbyes.some(phrase => lowerMessage.includes(phrase));
+    return goodbyeWords.some(word => lowerMessage.includes(word));
   };
 
   // Handle goodbye
