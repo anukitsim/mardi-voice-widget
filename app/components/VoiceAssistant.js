@@ -1,133 +1,273 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
+import Vapi from '@vapi-ai/web';
 
 export default function VoiceAssistant() {
+  const ORANGE = '#E5703A';
   const [isListening, setIsListening] = useState(false);
-  const [status, setStatus] = useState('Click to start voice assistant');
+  const [isConfigured, setIsConfigured] = useState(false);
+  const [retryCount, setRetryCount] = useState(0);
+  const [errorMessage, setErrorMessage] = useState('');
+  const MAX_RETRIES = 2;
+  const vapiRef = useRef(null);
 
-  // Handle keyboard events
+  // Initialize Vapi SDK on mount
   useEffect(() => {
-    const handleKeyPress = (event) => {
-      if (event.target.closest('.voice-assistant-button')) {
-        if (event.key === 'Enter' || event.key === ' ') {
-          event.preventDefault();
-          toggleListening();
+    const setupVapi = async () => {
+      try {
+        // Get environment variables
+        const vapiKey = process.env.NEXT_PUBLIC_VAPI_KEY;
+        const assistantId = process.env.NEXT_PUBLIC_VAPI_ASSISTANT_ID;
+
+        if (!vapiKey || !assistantId) {
+          throw new Error('Missing Vapi credentials');
         }
+
+        // Initialize Vapi instance
+        const vapi = new Vapi(vapiKey);
+        vapiRef.current = vapi;
+
+        // Set up event handlers
+        setupEventHandlers(vapi);
+        
+        setIsConfigured(true);
+        setErrorMessage('');
+
+      } catch (error) {
+        console.error('❌ Vapi setup error:', error);
+        setErrorMessage(`Setup failed: ${error.message}`);
+        setIsConfigured(false);
       }
     };
 
-    document.addEventListener('keydown', handleKeyPress);
-    return () => document.removeEventListener('keydown', handleKeyPress);
-  }, [isListening]);
+    setupVapi();
 
-  const toggleListening = () => {
-    if (isListening) {
-      setIsListening(false);
-      setStatus('Voice assistant stopped');
-      // Here you would stop the Vapi session
-    } else {
+    // Cleanup function
+    return () => {
+      if (vapiRef.current) {
+        vapiRef.current.stop();
+        vapiRef.current = null;
+      }
+    };
+  }, []);
+
+  // Set up all Vapi event handlers
+  const setupEventHandlers = (vapi) => {
+    // call-start: set listening state
+    vapi.on('call-start', () => {
       setIsListening(true);
-      setStatus('Listening... Speak now');
-      // Here you would start the Vapi session
+      setErrorMessage('');
+      setRetryCount(0);
+    });
+
+    // call-end: reset listening state
+    vapi.on('call-end', () => {
+      setIsListening(false);
+      setErrorMessage('');
+    });
+
+    // speech-start: user started speaking
+    vapi.on('speech-start', () => {
+      // User is speaking - no action needed
+    });
+
+    // speech-end: user stopped speaking
+    vapi.on('speech-end', () => {
+      // Processing - no action needed
+    });
+
+    // message: handle different message types
+    vapi.on('message', (message) => {
+      // Handle messages silently - no console spam
+    });
+
+    // error: display error message and retry logic
+    vapi.on('error', (error) => {
+      console.error('🛑 Vapi error:', error);
+      setIsListening(false);
+      
+      const errorMsg = error?.message || error?.errorMsg || 'Unknown error';
+      
+      // Auto-retry logic for transient errors
+      if (shouldRetry(errorMsg) && retryCount < MAX_RETRIES) {
+        const newRetryCount = retryCount + 1;
+        setRetryCount(newRetryCount);
+        setErrorMessage(`Retrying... (${newRetryCount}/${MAX_RETRIES})`);
+        
+        setTimeout(() => {
+          startCall();
+        }, 1000);
+      } else {
+        // Max retries reached or non-retryable error
+        setErrorMessage(`Error: ${errorMsg}`);
+        setRetryCount(0);
+      }
+    });
+
+    // Volume level - silent handling
+    vapi.on('volume-level', (level) => {
+      // Handle volume silently
+    });
+  };
+
+  // Determine if error should trigger retry
+  const shouldRetry = (errorMsg) => {
+    const retryableErrors = [
+      'network',
+      'connection',
+      'timeout',
+      'meeting has ended',
+      'websocket',
+      'failed to connect'
+    ];
+    
+    return retryableErrors.some(keyword => 
+      errorMsg.toLowerCase().includes(keyword)
+    );
+  };
+
+  // Start a new call
+  const startCall = async () => {
+    if (!vapiRef.current || !isConfigured) {
+      setErrorMessage('Not configured');
+      return;
+    }
+
+    try {
+      const assistantId = process.env.NEXT_PUBLIC_VAPI_ASSISTANT_ID;
+      setErrorMessage('');
+      await vapiRef.current.start(assistantId);
+      
+    } catch (error) {
+      console.error('💥 Start call failed:', error);
+      setErrorMessage(`Failed to start: ${error.message}`);
+      setIsListening(false);
     }
   };
 
+  // Stop the current call
+  const stopCall = () => {
+    if (vapiRef.current) {
+      vapiRef.current.stop();
+    }
+  };
+
+  // Handle main button click
+  const toggleListening = () => {
+    if (isListening) {
+      stopCall();
+    } else {
+      startCall();
+    }
+  };
+
+  // Handle close button click
   const stopListening = () => {
-    setIsListening(false);
-    setStatus('Voice assistant stopped');
-    // Here you would stop the Vapi session
+    stopCall();
   };
 
   return (
     <>
-      {/* Fixed positioning container */}
-      <div className="fixed inset-0 pointer-events-none z-50">
-        {/* Centered container */}
-        <div className="flex items-center justify-center min-h-screen">
-          <div className="relative pointer-events-auto">
-            
-            {/* Pulsing wave rings (only visible when listening) */}
-            {isListening && (
-              <div className="absolute inset-0 flex items-center justify-center">
-                {/* Wave ring 1 */}
-                <div className="absolute w-20 h-20 rounded-full border-2 border-brand-orange opacity-75 animate-pulse-rings"></div>
-                {/* Wave ring 2 */}
-                <div className="absolute w-32 h-32 rounded-full border-2 border-brand-orange opacity-50 animate-pulse-rings" style={{ animationDelay: '0.3s' }}></div>
-                {/* Wave ring 3 */}
-                <div className="absolute w-44 h-44 rounded-full border-2 border-brand-orange opacity-25 animate-pulse-rings" style={{ animationDelay: '0.6s' }}></div>
-              </div>
-            )}
+      {/* Wave animations styles */}
+      <style jsx>{`
+        @keyframes wave { 
+          0% { transform: scale(1); opacity: 0.35; }
+          100% { transform: scale(2); opacity: 0; }
+        }
+        @keyframes bounce { 
+          0%, 100% { transform: translateY(0); }
+          50% { transform: translateY(-4px); }
+        }
+        .wave { animation: wave 1.8s ease-out infinite; }
+        .bounce { animation: bounce 2.4s ease-in-out infinite; }
+      `}</style>
 
-            {/* Status tooltip */}
-            <div className={`absolute -top-16 left-1/2 transform -translate-x-1/2 transition-all duration-300 ${
-              isListening ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-2'
-            }`}>
-              <div className="bg-gray-900 text-white px-3 py-2 rounded-lg text-sm whitespace-nowrap">
-                {status}
-                <div className="absolute top-full left-1/2 transform -translate-x-1/2 w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-gray-900"></div>
-              </div>
+      {/* Fixed positioning at bottom center */}
+      <div className="fixed bottom-8 left-1/2 -translate-x-1/2 z-[99999]">
+        <div className="relative">
+          
+          {/* Background waves (only visible when configured) */}
+          {isConfigured && (
+            <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+              {[0, 1, 2].map(i => (
+                <span 
+                  key={i} 
+                  className="wave absolute w-20 h-20 rounded-full border"
+                  style={{
+                    borderColor: ORANGE,
+                    animationDelay: `${i * 0.6}s`
+                  }}
+                />
+              ))}
             </div>
+          )}
 
-            {/* Close button (only visible when listening) */}
-            {isListening && (
-              <button
-                onClick={stopListening}
-                className="absolute -top-2 -right-2 w-6 h-6 bg-gray-900 text-white rounded-full flex items-center justify-center hover:bg-gray-700 transition-colors duration-200 z-10"
-                aria-label="Stop listening"
-              >
-                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
+          {/* Active waves when listening (more pronounced) */}
+          {isListening && (
+            <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+              {[0, 1, 2].map(i => (
+                <span 
+                  key={i} 
+                  className="wave absolute w-20 h-20 rounded-full border-2"
+                  style={{
+                    borderColor: ORANGE,
+                    animationDelay: `${i * 0.3}s`
+                  }}
+                />
+              ))}
+            </div>
+          )}
+
+          {/* Main microphone button */}
+          <button
+            onClick={toggleListening}
+            disabled={!isConfigured}
+            className={`relative w-20 h-20 rounded-full flex items-center justify-center text-white transition-transform duration-300 ease-out focus:outline-none focus:ring-4 focus:ring-orange-300 ${
+              isListening 
+                ? 'scale-105 shadow-lg' 
+                : 'hover:scale-105 bounce'
+            } ${
+              !isConfigured ? 'cursor-not-allowed' : ''
+            }`}
+            style={{
+              background: ORANGE
+            }}
+            aria-label={isListening ? 'Stop voice assistant' : 'Start voice assistant'}
+            tabIndex={0}
+          >
+            {isListening ? (
+              // Speaker icon when listening
+              <svg className="w-8 h-8 animate-pulse" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/>
+              </svg>
+            ) : (
+              // Microphone icon when idle
+              <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                      d="M12 14a4 4 0 004-4V5a4 4 0 10-8 0v5a4 4 0 004 4zm6-4v1a6 6 0 01-12 0v-1m6 6v4m-4 0h8" />
+              </svg>
             )}
+          </button>
 
-            {/* Main voice assistant button */}
-            <button
-              onClick={toggleListening}
-              className={`voice-assistant-button relative w-20 h-20 rounded-full bg-brand-orange text-white shadow-lg transition-all duration-300 ease-out focus:outline-none focus:ring-4 focus:ring-brand-orange focus:ring-opacity-50 ${
-                isListening 
-                  ? 'animate-pulse shadow-2xl shadow-brand-orange/50' 
-                  : 'hover:scale-105 animate-gentle-bounce'
-              }`}
-              style={{
-                animationDuration: isListening ? '1s' : '2s',
-                animationTimingFunction: 'cubic-bezier(0.4, 0, 0.6, 1)'
-              }}
-              aria-label={isListening ? 'Stop voice assistant' : 'Start voice assistant'}
-              aria-pressed={isListening}
-              tabIndex={0}
+          {/* Close button when listening */}
+          {isListening && (
+            <button 
+              aria-label="Stop listening"
+              onClick={stopListening}
+              className="absolute -top-2 -right-2 w-6 h-6 rounded-full text-white text-xs flex items-center justify-center shadow hover:opacity-80 transition-opacity"
+              style={{ backgroundColor: ORANGE }}
             >
-              {/* Microphone icon */}
-              <div className="flex items-center justify-center w-full h-full">
-                <svg 
-                  className="w-8 h-8" 
-                  fill="none" 
-                  stroke="currentColor" 
-                  viewBox="0 0 24 24"
-                  strokeWidth={2}
-                >
-                  <path 
-                    strokeLinecap="round" 
-                    strokeLinejoin="round" 
-                    d="M12 1a3 3 0 00-3 3v8a3 3 0 006 0V4a3 3 0 00-3-3z" 
-                  />
-                  <path 
-                    strokeLinecap="round" 
-                    strokeLinejoin="round" 
-                    d="M19 10v2a7 7 0 01-14 0v-2M12 19v4M8 23h8" 
-                  />
-                </svg>
-              </div>
+              ×
             </button>
+          )}
 
-            {/* Idle status text (only visible when not listening) */}
-            {!isListening && (
-              <div className="absolute -bottom-12 left-1/2 transform -translate-x-1/2 text-sm text-gray-600 whitespace-nowrap">
-                Click to start voice assistant
-              </div>
-            )}
-          </div>
+          {/* Error message tooltip (only shows when there's an error) */}
+          {errorMessage && (
+            <div className="absolute top-full left-1/2 -translate-x-1/2 mt-2 w-max px-2 py-1 text-xs rounded shadow-lg bg-red-600 text-white">
+              {errorMessage}
+            </div>
+          )}
         </div>
       </div>
     </>
